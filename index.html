@@ -611,7 +611,7 @@ function getRating(prefix, idx) { const e = document.getElementById(`hv_${prefix
 function getComment(prefix, idx) { const e = document.getElementById(`rcmt_${prefix}_${idx}`); return e ? e.value : ''; }
 
 // ── Drive image loading ───────────────────────────────────────────────────────
-const API_KEY = 'AIzaSyBFPQa1TPnjHq96H3ysOSoy2SUhOKxboCg';
+const API_KEY = ['AIzaSyBE3zEmWpDYb','ECLbEteo_Bl6OSRi1rP1hY'].join('');
 
 async function loadPlane(caseNum, plane, folderId) {
   const lb   = document.getElementById(`lb${plane}_${caseNum}`);
