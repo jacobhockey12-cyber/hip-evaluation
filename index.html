@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hip Model Evaluation</title>
+<style>
+:root {
+  --bg: #0d0f12; --surface: #151820; --surface2: #1c2028; --surface3: #232830;
+  --border: #2a2f3a; --border2: #363d4a;
+  --text: #e8eaf0; --text2: #8a90a0; --text3: #555e70;
+  --blue: #4a9eff; --blue-dim: #1a3a6a; --blue-bg: #0e1e35;
+  --green: #3ecf7a; --green-dim: #0e3020;
+  --red: #ff5a5a; --amber: #ffb84a;
+  --radius: 8px; --radius-lg: 12px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+
+/* Header */
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.pill { font-size: 11px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+.pill:hover { border-color: var(--blue); color: var(--blue); }
+.sheets-badge { font-size: 10px; padding: 3px 8px; border-radius: 99px; background: var(--green-dim); border: 1px solid #1a5030; color: var(--green); display: none; }
+
+/* Case tabs */
+.case-tabs { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; gap: 4px; align-items: flex-end; }
+.case-tab { font-size: 12px; font-weight: 600; padding: 10px 18px; border-radius: var(--radius) var(--radius) 0 0; border: 1px solid transparent; color: var(--text3); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 8px; white-space: nowrap; position: relative; top: 1px; }
+.case-tab:hover { color: var(--text2); background: var(--surface2); }
+.case-tab.active { color: var(--text); background: var(--bg); border-color: var(--border); border-bottom-color: var(--bg); }
+.case-tab .submitted-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); display: none; }
+.case-tab.submitted .submitted-dot { display: inline-block; }
+
+/* Layout */
+.main { display: grid; grid-template-columns: 1fr 380px; height: calc(100vh - 97px); }
+.left-panel { overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+.right-panel { background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+
+/* Setup overlay */
+.setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.setup-modal { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-lg); max-width: 700px; width: 100%; max-height: 92vh; overflow-y: auto; padding: 2rem; }
+.setup-modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.setup-desc { font-size: 13px; color: var(--text2); margin-bottom: 1.5rem; line-height: 1.6; }
+.case-setup-block { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+.case-setup-block h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.case-num-badge { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+.c1 { background: #1a3a6a; color: var(--blue); }
+.c2 { background: #1a3a2a; color: var(--green); }
+.c3 { background: #3a1a2a; color: #e060c0; }
+.setup-field { margin-bottom: 8px; }
+.setup-field label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; }
+.setup-field input { width: 100%; font-size: 12px; padding: 8px 10px; background: var(--surface3); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); outline: none; font-family: 'Courier New', monospace; }
+.setup-field input:focus { border-color: var(--blue); }
+.setup-field input::placeholder { color: var(--text3); }
+.setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.setup-section { margin-bottom: 1.25rem; }
+.setup-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 10px; }
+.setup-note { font-size: 11px; color: var(--text3); line-height: 1.6; margin-bottom: 10px; }
+.setup-note code { background: var(--surface3); padding: 1px 5px; border-radius: 3px; font-family: 'Courier New', monospace; color: var(--amber); }
+.script-area { width: 100%; font-family: 'Courier New', monospace; font-size: 11px; background: var(--surface3); border: 1px solid var(--border); color: var(--amber); padding: 10px; border-radius: var(--radius); resize: none; min-height: 110px; outline: none; margin-top: 6px; }
+.btn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1.5rem; }
+.btn { font-size: 13px; padding: 9px 20px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--surface2); color: var(--text); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.btn:hover { border-color: var(--blue); color: var(--blue); }
+.btn-green { background: var(--green); border-color: var(--green); color: #000; font-weight: 600; }
+.btn-green:hover { background: #30c060; color: #000; }
+
+/* Share bar */
+.share-bar { background: var(--blue-bg); border: 1px solid var(--blue-dim); border-radius: var(--radius); padding: 10px 14px; display: none; }
+.share-bar-label { font-size: 11px; color: var(--blue); font-weight: 600; margin-bottom: 6px; }
+.share-url-row { display: flex; gap: 6px; }
+.share-url-row input { flex: 1; font-size: 11px; padding: 7px 10px; background: var(--surface); border: 1px solid var(--blue-dim); border-radius: var(--radius); color: var(--text2); font-family: 'Courier New', monospace; outline: none; }
+.copy-btn { font-size: 11px; padding: 7px 12px; border-radius: var(--radius); border: 1px solid var(--blue-dim); background: var(--blue-dim); color: var(--blue); cursor: pointer; font-family: inherit; white-space: nowrap; }
+.copy-btn:hover { background: var(--blue); color: #fff; }
+
+/* CT Viewers */
+.viewers-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.viewer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.viewer-header { background: var(--surface2); padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.viewer-plane { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.plane-axial { color: #4af0c8; } .plane-coronal { color: #f0c84a; } .plane-sagittal { color: #c84af0; }
+.viewer-info { font-size: 10px; color: var(--text3); font-family: 'Courier New', monospace; }
+.viewer-viewport { position: relative; width: 100%; aspect-ratio: 1; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: crosshair; }
+.viewer-viewport img { width: 100%; height: 100%; object-fit: contain; display: none; user-select: none; pointer-events: none; }
+.viewer-placeholder { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 1rem; text-align: center; }
+.viewer-placeholder p { font-size: 11px; color: var(--text3); line-height: 1.5; }
+.viewer-controls { background: var(--surface2); padding: 8px 10px; border-top: 1px solid var(--border); }
+.slice-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.slice-label { font-size: 10px; color: var(--text3); font-family: 'Courier New', monospace; min-width: 70px; }
+input[type=range] { flex: 1; accent-color: var(--blue); cursor: pointer; height: 4px; }
+.wl-row { display: flex; gap: 4px; }
+.wl-btn { font-size: 10px; padding: 3px 7px; border-radius: 4px; border: 1px solid var(--border2); background: var(--surface3); color: var(--text2); cursor: pointer; font-family: inherit; transition: all 0.12s; }
+.wl-btn:hover { border-color: var(--blue); color: var(--blue); }
+.loading-bar { height: 2px; background: var(--border); }
+.loading-bar-fill { height: 100%; background: var(--blue); width: 0%; transition: width 0.3s; }
+
+/* Video */
+.video-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.video-card-header { background: var(--surface2); padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.video-card-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--red); }
+.video-viewport { background: #000; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; }
+.video-viewport video, .video-viewport iframe { width: 100%; height: 100%; border: none; display: block; }
+.video-placeholder { text-align: center; padding: 1.5rem; width: 100%; }
+.video-placeholder p { font-size: 12px; color: var(--text3); margin-bottom: 10px; }
+.video-url-row { display: flex; gap: 6px; }
+.video-url-row input { flex: 1; font-size: 12px; padding: 7px 10px; background: var(--surface3); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); outline: none; font-family: inherit; }
+
+/* Survey */
+.survey-case-header { display: flex; align-items: center; gap: 10px; }
+.survey-case-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 99px; }
+.survey-title { font-size: 14px; font-weight: 700; }
+.survey-subtitle { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.divider { height: 1px; background: var(--border); }
+.survey-section-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.survey-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.field-group { margin-bottom: 10px; }
+.field-label { font-size: 11px; color: var(--text2); display: block; margin-bottom: 5px; }
+.field-input { width: 100%; font-size: 13px; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); outline: none; font-family: inherit; }
+.field-input:focus { border-color: var(--blue); }
+.field-textarea { width: 100%; font-size: 12px; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); outline: none; font-family: inherit; resize: vertical; min-height: 64px; line-height: 1.5; }
+.field-textarea:focus { border-color: var(--blue); }
+input[type=date].field-input { color-scheme: dark; }
+.radio-group { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.radio-pill input { display: none; }
+.radio-pill label { font-size: 12px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--border2); color: var(--text2); cursor: pointer; display: block; transition: all 0.12s; white-space: nowrap; }
+.radio-pill input:checked + label { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); font-weight: 600; }
+.radio-pill label:hover { border-color: var(--blue); color: var(--blue); }
+.rating-item { margin-bottom: 12px; }
+.rating-item-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; line-height: 1.4; }
+.rating-btns { display: flex; gap: 4px; }
+.r-btn { flex: 1; padding: 8px 0; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--surface2); color: var(--text2); cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit; transition: all 0.12s; text-align: center; }
+.r-btn:hover { border-color: var(--blue); color: var(--blue); }
+.r-btn.r1.active { background: #3a0e0e; border-color: var(--red); color: var(--red); }
+.r-btn.r2.active { background: #3a220e; border-color: #ff8a4a; color: #ff8a4a; }
+.r-btn.r3.active { background: #2a2a0e; border-color: var(--amber); color: var(--amber); }
+.r-btn.r4.active { background: #0e2a1a; border-color: #4adf8a; color: #4adf8a; }
+.r-btn.r5.active { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.rating-comment { font-size: 11px; padding: 5px 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); outline: none; font-family: inherit; width: 100%; margin-top: 4px; }
+.rating-comment:focus { border-color: var(--blue); }
+.btn-submit { width: 100%; padding: 12px; font-size: 14px; font-weight: 700; border-radius: var(--radius); border: none; background: var(--blue); color: #fff; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.btn-submit:hover { background: #3a8ef0; }
+.btn-submit:disabled { background: var(--surface3); color: var(--text3); cursor: not-allowed; }
+.btn-submit.submitted { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); }
+.status-msg { font-size: 12px; padding: 10px 14px; border-radius: var(--radius); margin-top: 8px; display: none; font-family: 'Courier New', monospace; line-height: 1.5; }
+.status-success { background: var(--green-dim); border: 1px solid #1a6040; color: var(--green); }
+.status-error { background: #3a0e0e; border: 1px solid #6a1a1a; color: var(--red); }
+.status-sending { background: var(--blue-bg); border: 1px solid var(--blue-dim); color: var(--blue); }
+
+@media (max-width: 900px) {
+  .main { grid-template-columns: 1fr; height: auto; }
+  .right-panel { border-left: none; border-top: 1px solid var(--border); }
+  .viewers-grid { grid-template-columns: 1fr; }
+  .setup-grid { grid-template-columns: 1fr; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- SETUP OVERLAY -->
+<div class="setup-overlay" id="setupOverlay">
+  <div class="setup-modal">
+    <h2>Setup — Multi-Case Evaluation</h2>
+    <p class="setup-desc">Configure up to 3 cases. Each gets its own CT viewer, video, and survey. Surgeons can switch between cases using the tabs. All submissions go to your Google Sheet tagged with the case ID.</p>
+
+    <!-- Case 1 -->
+    <div class="case-setup-block">
+      <h3><span class="case-num-badge c1">1</span> Case 1</h3>
+      <div class="setup-field"><label>Case name / Model identifier</label><input type="text" id="cfg_name_1" placeholder="e.g. Hip Case 001 — Left THA Revision"></div>
+      <div class="setup-grid">
+        <div class="setup-field"><label>Axial folder ID</label><input type="text" id="cfg_axial_1" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Coronal folder ID</label><input type="text" id="cfg_coronal_1" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Sagittal folder ID</label><input type="text" id="cfg_sagittal_1" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Video — YouTube URL or Google Drive MP4 file ID</label><input type="text" id="cfg_video_1" placeholder="YouTube URL or Drive file ID"></div>
+        </div>
+    </div>
+
+    <!-- Case 2 -->
+    <div class="case-setup-block">
+      <h3><span class="case-num-badge c2">2</span> Case 2</h3>
+      <div class="setup-field"><label>Case name / Model identifier</label><input type="text" id="cfg_name_2" placeholder="e.g. Hip Case 002 — Right Hip Dysplasia"></div>
+      <div class="setup-grid">
+        <div class="setup-field"><label>Axial folder ID</label><input type="text" id="cfg_axial_2" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Coronal folder ID</label><input type="text" id="cfg_coronal_2" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Sagittal folder ID</label><input type="text" id="cfg_sagittal_2" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Video — YouTube URL or Google Drive MP4 file ID</label><input type="text" id="cfg_video_2" placeholder="YouTube URL or Drive file ID"></div>
+        </div>
+    </div>
+
+    <!-- Case 3 -->
+    <div class="case-setup-block">
+      <h3><span class="case-num-badge c3">3</span> Case 3</h3>
+      <div class="setup-field"><label>Case name / Model identifier</label><input type="text" id="cfg_name_3" placeholder="e.g. Hip Case 003 — Bilateral Pelvis"></div>
+      <div class="setup-grid">
+        <div class="setup-field"><label>Axial folder ID</label><input type="text" id="cfg_axial_3" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Coronal folder ID</label><input type="text" id="cfg_coronal_3" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Sagittal folder ID</label><input type="text" id="cfg_sagittal_3" placeholder="Google Drive folder ID"></div>
+        <div class="setup-field"><label>Video — YouTube URL or Google Drive MP4 file ID</label><input type="text" id="cfg_video_3" placeholder="YouTube URL or Drive file ID"></div>
+        </div>
+    </div>
+
+    <!-- Google Sheets -->
+    <div class="setup-section">
+      <div class="setup-section-title">Google Sheets — Central Response Collection</div>
+      <div class="setup-note">
+        1. Create a blank Google Sheet → <strong>Extensions → Apps Script</strong> → paste the script below → Save.<br>
+        2. <strong>Deploy → New deployment → Web app</strong> → Execute as: <strong>Me</strong> → Access: <strong>Anyone</strong> → Deploy → Authorize.<br>
+        3. Paste the Web App URL below.
+      </div>
+      <textarea class="script-area" id="appsScript" readonly></textarea>
+      <div class="setup-field" style="margin-top:10px;">
+        <label>Apps Script Web App URL</label>
+        <input type="text" id="cfg_sheets" placeholder="https://script.google.com/macros/s/…/exec">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="closeSetup()">Cancel</button>
+      <button class="btn btn-green" onclick="saveSetup()">Save &amp; Generate Link</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <span class="header-title">Hip Model Evaluation</span>
+  <div class="header-actions">
+    <span class="sheets-badge" id="sheetsBadge">● Sheets connected</span>
+    <button class="pill" onclick="openSetup()">⚙ Setup</button>
+  </div>
+</header>
+
+<!-- CASE TABS -->
+<div class="case-tabs" id="caseTabs"></div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="left-panel" id="leftPanel"></div>
+  <div class="right-panel" id="rightPanel"></div>
+</div>
+
+<script>
+// ── Apps Script ───────────────────────────────────────────────────────────────
+document.getElementById('appsScript').value =
+`function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Responses') || ss.insertSheet('Responses');
+  var data = JSON.parse(e.postData.contents);
+  var keys = Object.keys(data), vals = Object.values(data);
+  if (sheet.getLastRow() === 0) sheet.appendRow(keys);
+  sheet.appendRow(vals);
+  try {
+    var pdfName = 'HipEval_' + (data['Case ID']||'case') + '_' + (data['Evaluator Name']||'unknown').replace(/\\s+/g,'_') + '.pdf';
+    var html = '<html><body style="font-family:Arial;font-size:12px;padding:20px;">';
+    html += '<h2>Hip Model Evaluation — ' + (data['Case ID']||'') + '</h2><hr>';
+    keys.forEach(function(k){ html += '<p><b>'+k+':</b> '+(data[k]||'—')+'</p>'; });
+    html += '</body></html>';
+    var blob = Utilities.newBlob(html,'text/html',pdfName).getAs('application/pdf');
+    blob.setName(pdfName); DriveApp.createFile(blob);
+  } catch(err) {}
+  return ContentService.createTextOutput(JSON.stringify({status:'ok'})).setMimeType(ContentService.MimeType.JSON);
+}`;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const CASES = [1,2,3];
+let CONFIG = { cases: [{},{},{}], sheets: '' };
+let activeCase = 0;
+const planeState = {};
+CASES.forEach(n => {
+  planeState[n] = {
+    Axial:    { urls:[], idx:0, brightness:100, cache:{} },
+    Coronal:  { urls:[], idx:0, brightness:100, cache:{} },
+    Sagittal: { urls:[], idx:0, brightness:100, cache:{} },
+  };
+});
+
+const CASE_COLORS = ['var(--blue)','var(--green)','#e060c0'];
+const CASE_BG     = ['var(--blue-bg)','var(--green-dim)','#2a0a2a'];
+
+// ── URL encode/decode ─────────────────────────────────────────────────────────
+function buildShareUrl() {
+  const p = new URLSearchParams();
+  CONFIG.cases.forEach((c,i) => {
+    const n = i+1;
+    if (c.name)     p.set(`n${n}`, encodeURIComponent(c.name));
+    if (c.axial)    p.set(`a${n}`, c.axial);
+    if (c.coronal)  p.set(`c${n}`, c.coronal);
+    if (c.sagittal) p.set(`s${n}`, c.sagittal);
+    if (c.video)    p.set(`v${n}`, encodeURIComponent(c.video));
+  });
+  if (CONFIG.sheets) p.set('sh', btoa(CONFIG.sheets));
+  return window.location.origin + window.location.pathname + '?' + p.toString();
+}
+
+function loadFromUrl() {
+  const p = new URLSearchParams(window.location.search);
+  CONFIG.cases = CASES.map(n => ({
+    name:     p.has(`n${n}`) ? decodeURIComponent(p.get(`n${n}`)) : '',
+    axial:    p.get(`a${n}`) || '',
+    coronal:  p.get(`c${n}`) || '',
+    sagittal: p.get(`s${n}`) || '',
+    video:    p.has(`v${n}`) ? decodeURIComponent(p.get(`v${n}`)) : '',
+  }));
+  CONFIG.sheets = p.has('sh') ? atob(p.get('sh')) : (localStorage.getItem('heval_sheets') || '');
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+function openSetup() {
+  CASES.forEach(n => {
+    const c = CONFIG.cases[n-1];
+    document.getElementById(`cfg_name_${n}`).value     = c.name     || '';
+    document.getElementById(`cfg_axial_${n}`).value    = c.axial    || '';
+    document.getElementById(`cfg_coronal_${n}`).value  = c.coronal  || '';
+    document.getElementById(`cfg_sagittal_${n}`).value = c.sagittal || '';
+    document.getElementById(`cfg_video_${n}`).value    = c.video    || '';
+  });
+  document.getElementById('cfg_sheets').value = CONFIG.sheets || '';
+  document.getElementById('setupOverlay').style.display = 'flex';
+}
+function closeSetup() { document.getElementById('setupOverlay').style.display = 'none'; }
+function saveSetup() {
+  window._showShareBar = true;
+  CONFIG.cases = CASES.map(n => ({
+    name:     document.getElementById(`cfg_name_${n}`).value.trim(),
+    axial:    document.getElementById(`cfg_axial_${n}`).value.trim(),
+    coronal:  document.getElementById(`cfg_coronal_${n}`).value.trim(),
+    sagittal: document.getElementById(`cfg_sagittal_${n}`).value.trim(),
+    video:    document.getElementById(`cfg_video_${n}`).value.trim(),
+  }));
+  CONFIG.sheets = document.getElementById('cfg_sheets').value.trim();
+  if (CONFIG.sheets) localStorage.setItem('heval_sheets', CONFIG.sheets);
+  const url = buildShareUrl();
+  history.replaceState(null, '', url);
+  closeSetup();
+  renderAll();
+}
+
+// ── Render tabs + panels ──────────────────────────────────────────────────────
+function renderAll() {
+  renderTabs();
+  renderLeft(activeCase);
+  renderRight(activeCase);
+  if (CONFIG.sheets) document.getElementById('sheetsBadge').style.display = 'inline';
+}
+
+function renderTabs() {
+  const el = document.getElementById('caseTabs');
+  el.innerHTML = '';
+  CONFIG.cases.forEach((c, i) => {
+    if (!c.name && !c.axial) return;
+    const tab = document.createElement('div');
+    tab.className = 'case-tab' + (i === activeCase ? ' active' : '') + (submittedCases.has(i) ? ' submitted' : '');
+    tab.id = `tab_${i}`;
+    tab.innerHTML = `<span class="case-num-badge" style="background:${CASE_BG[i]};color:${CASE_COLORS[i]};">${i+1}</span>
+      ${c.name || `Case ${i+1}`}
+      <span class="submitted-dot"></span>`;
+    tab.onclick = () => switchCase(i);
+    el.appendChild(tab);
+  });
+  // Share bar — only show to configurator, not to surgeons opening a shared link
+  if (window._showShareBar) {
+    let sb = document.getElementById('shareBarEl');
+    if (!sb) {
+      sb = document.createElement('div');
+      sb.id = 'shareBarEl';
+      sb.className = 'share-bar';
+      sb.innerHTML = `<div class="share-bar-label">Share this link with surgeons</div>
+        <div class="share-url-row">
+          <input type="text" id="shareUrlInput" readonly>
+          <button class="copy-btn" onclick="copyLink()">Copy link</button>
+        </div>`;
+      document.getElementById('leftPanel').prepend(sb);
+    }
+    sb.style.display = 'block';
+    document.getElementById('shareUrlInput').value = buildShareUrl();
+  }
+}
+
+function switchCase(i) {
+  activeCase = i;
+  document.querySelectorAll('.case-tab').forEach((t,idx) => t.classList.toggle('active', idx === i));
+  renderLeft(i);
+  renderRight(i);
+}
+
+// ── Left panel (viewers + video) ─────────────────────────────────────────────
+function renderLeft(ci) {
+  const lp = document.getElementById('leftPanel');
+  // Remove old viewer section if exists
+  const old = document.getElementById('viewerSection');
+  if (old) old.remove();
+
+  const c = CONFIG.cases[ci];
+  const n = ci + 1;
+  const div = document.createElement('div');
+  div.id = 'viewerSection';
+  div.style.display = 'flex';
+  div.style.flexDirection = 'column';
+  div.style.gap = '1rem';
+
+  // Share bar placeholder (will be managed separately)
+  div.innerHTML = `
+  <div class="viewers-grid">
+    ${['Axial','Coronal','Sagittal'].map(plane => `
+    <div class="viewer">
+      <div class="viewer-header">
+        <span class="viewer-plane plane-${plane.toLowerCase()}">${plane}</span>
+        <span class="viewer-info" id="info${plane}_${n}">—</span>
+      </div>
+      <div class="viewer-viewport" id="vp${plane}_${n}">
+        <div class="viewer-placeholder" id="ph${plane}_${n}">
+          <p>${plane} plane<br>${c[plane.toLowerCase()] ? 'Loading…' : 'Not configured'}</p>
+        </div>
+        <img id="img${plane}_${n}" alt="${plane} CT" style="display:none;">
+      </div>
+      <div class="loading-bar"><div class="loading-bar-fill" id="lb${plane}_${n}"></div></div>
+      <div class="viewer-controls">
+        <div class="slice-row">
+          <span class="slice-label" id="slice${plane}_${n}">—</span>
+          <input type="range" id="range${plane}_${n}" min="0" value="0"
+            oninput="goSlice(${n},'${plane}',+this.value)"
+            onmousemove="goSlice(${n},'${plane}',+this.value)"
+            ontouchmove="goSlice(${n},'${plane}',+this.value)">
+        </div>
+        <div class="wl-row">
+          <button class="wl-btn" onclick="adjBright(${n},'${plane}',-20)">− dim</button>
+          <button class="wl-btn" onclick="adjBright(${n},'${plane}',20)">+ bright</button>
+          <button class="wl-btn" onclick="adjBright(${n},'${plane}',0)">reset</button>
+        </div>
+      </div>
+    </div>`).join('')}
+  </div>
+  <div class="video-card">
+    <div class="video-card-header">
+      <span class="video-card-title">3D Print Video — ${c.name || `Case ${n}`}</span>
+      <span style="font-size:11px;color:var(--text3);" id="videoStatus_${n}">Not loaded</span>
+    </div>
+    <div class="video-viewport" id="videoVp_${n}">
+      <div class="video-placeholder">
+        <p>Paste a YouTube, Vimeo URL, or Google Drive file ID / URL</p>
+        <div class="video-url-row">
+          <input type="text" id="videoInput_${n}" placeholder="YouTube URL or Google Drive file ID…" value="${c.video||''}">
+          <button class="btn" style="padding:7px 12px;font-size:12px;white-space:nowrap;" onclick="loadVideo(${n})">Load</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  lp.appendChild(div);
+
+  // Load images
+  ['Axial','Coronal','Sagittal'].forEach(plane => {
+    const fid = c[plane.toLowerCase()];
+    if (fid) loadPlane(n, plane, fid);
+    // Scroll wheel
+    setTimeout(() => {
+      const vp = document.getElementById(`vp${plane}_${n}`);
+      if (vp && !vp._wheelBound) {
+        vp._wheelBound = true;
+        vp.addEventListener('wheel', e => {
+          e.preventDefault();
+          const r = document.getElementById(`range${plane}_${n}`);
+          const nv = Math.max(0, Math.min(+r.max, +r.value + (e.deltaY > 0 ? 1 : -1)));
+          r.value = nv; goSlice(n, plane, nv);
+        }, {passive: false});
+      }
+    }, 100);
+  });
+
+  // Load video
+  if (c.video) loadVideoForCase(n, c.video);
+}
+
+// ── Right panel (survey) ──────────────────────────────────────────────────────
+const surveyState = {}; // stores per-case survey values
+
+function renderRight(ci) {
+  const rp = document.getElementById('rightPanel');
+  rp.innerHTML = '';
+  const n = ci + 1;
+  const c = CONFIG.cases[ci];
+  const color = CASE_COLORS[ci];
+  const bg = CASE_BG[ci];
+  const today = new Date().toISOString().split('T')[0];
+  const sv = surveyState[n] || {};
+
+  rp.innerHTML = `
+  <div class="survey-case-header">
+    <span class="case-num-badge" style="width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:${bg};color:${color};">${n}</span>
+    <div>
+      <div class="survey-title">${c.name || `Case ${n}`}</div>
+      <div class="survey-subtitle">Complete all sections and submit</div>
+    </div>
+  </div>
+  <div class="divider"></div>
+
+  <!-- S1 -->
+  <div>
+    <div class="survey-section-title">Section 1 — General Information</div>
+    <div class="field-group"><label class="field-label">Evaluator name</label><input type="text" class="field-input" id="s1_name_${n}" placeholder="Full name" value="${sv.name||''}"></div>
+    <div class="field-group"><label class="field-label">Medical specialty</label><input type="text" class="field-input" id="s1_spec_${n}" placeholder="e.g. Orthopaedic Surgery – Adult Reconstruction" value="${sv.spec||''}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" class="field-group">
+      <div><label class="field-label">Date</label><input type="date" class="field-input" id="s1_date_${n}" value="${sv.date||today}"></div>
+      <div><label class="field-label">Model identifier</label><input type="text" class="field-input" id="s1_mid_${n}" value="${c.name||''}" placeholder="Case ID"></div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Source imaging modality</label>
+      <div class="radio-group">
+        <div class="radio-pill"><input type="radio" name="mod_${n}" id="mod_ct_${n}" value="CT" ${sv.mod==='CT'?'checked':''}><label for="mod_ct_${n}">CT</label></div>
+        <div class="radio-pill"><input type="radio" name="mod_${n}" id="mod_mri_${n}" value="MRI" ${sv.mod==='MRI'?'checked':''}><label for="mod_mri_${n}">MRI</label></div>
+      </div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Model type</label>
+      <div class="radio-group">
+        <div class="radio-pill"><input type="radio" name="mt_${n}" id="mt1_${n}" value="Entire Pelvis"><label for="mt1_${n}">Entire Pelvis</label></div>
+        <div class="radio-pill"><input type="radio" name="mt_${n}" id="mt2_${n}" value="Unilateral Hip"><label for="mt2_${n}">Unilateral Hip</label></div>
+        <div class="radio-pill"><input type="radio" name="mt_${n}" id="mt3_${n}" value="Femoral Component"><label for="mt3_${n}">Femoral Component</label></div>
+        <div class="radio-pill"><input type="radio" name="mt_${n}" id="mt4_${n}" value="Other"><label for="mt4_${n}">Other</label></div>
+      </div>
+      <input type="text" class="field-input" id="s1_other_${n}" placeholder="If other, specify…" style="margin-top:6px;">
+    </div>
+    <div class="field-group"><label class="field-label">Metal implant (describe)</label><input type="text" class="field-input" id="s1_imp_${n}" placeholder="Implant type, manufacturer, location…"></div>
+  </div>
+  <div class="divider"></div>
+
+  <!-- S2 -->
+  <div>
+    <div class="survey-section-title">Section 2 — Anatomical Accuracy</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:12px;">1 = Poor · 2 = Below average · 3 = Average · 4 = Good · 5 = Excellent</p>
+    <div id="sec2_${n}"></div>
+  </div>
+  <div class="divider"></div>
+
+  <!-- S3 -->
+  <div>
+    <div class="survey-section-title">Section 3 — Clinical Utility</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:12px;">1 = Poor · 5 = Excellent</p>
+    <div id="sec3_${n}"></div>
+    <div class="field-group"><label class="field-label">Useful for which diagnoses/treatment plans?</label><textarea class="field-textarea" id="s3_use_${n}"></textarea></div>
+    <div class="field-group"><label class="field-label">NOT useful for which diagnoses/treatment plans?</label><textarea class="field-textarea" id="s3_nuse_${n}"></textarea></div>
+  </div>
+  <div class="divider"></div>
+
+  <!-- S4 -->
+  <div>
+    <div class="survey-section-title">Section 4 — Technical Evaluation</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:12px;">1 = Poor · 5 = Excellent</p>
+    <div id="sec4_${n}"></div>
+  </div>
+  <div class="divider"></div>
+
+  <!-- S5 -->
+  <div>
+    <div class="survey-section-title">Section 5 — Additional Feedback</div>
+    <div class="field-group"><label class="field-label">1. What improvements would you recommend?</label><textarea class="field-textarea" id="s5_imp_${n}"></textarea></div>
+    <div class="field-group"><label class="field-label">2. Would you use similar models in practice? Why or why not?</label><textarea class="field-textarea" id="s5_prac_${n}"></textarea></div>
+    <div class="field-group"><label class="field-label">3. Any additional comments or concerns</label><textarea class="field-textarea" id="s5_cmt_${n}"></textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" class="field-group">
+      <div><label class="field-label">Signature (type full name)</label><input type="text" class="field-input" id="s5_sig_${n}"></div>
+      <div><label class="field-label">Date</label><input type="date" class="field-input" id="s5_date_${n}" value="${today}"></div>
+    </div>
+  </div>
+  <div class="divider"></div>
+
+  <div>
+    <button class="btn-submit ${submittedCases.has(ci)?'submitted':''}" id="submitBtn_${n}" onclick="submitCase(${ci})">
+      ${submittedCases.has(ci) ? '✓ Submitted' : `Submit Case ${n} Evaluation`}
+    </button>
+    <div class="status-msg" id="statusMsg_${n}"></div>
+  </div>`;
+
+  // Build rating sections
+  buildRatings(`sec2_${n}`, SEC2, `s2_${n}`, false);
+  buildRatings(`sec3_${n}`, SEC3, `s3_${n}`, true);
+  buildRatings(`sec4_${n}`, SEC4, `s4_${n}`, true);
+}
+
+// ── Survey items ──────────────────────────────────────────────────────────────
+const SEC2 = ["Overall anatomical fidelity","Surface smoothness and bone texture","Acetabular morphology and landmarks","Femoral head and neck contours","Accuracy of joint congruency","Metal implant structural accuracy"];
+const SEC3 = ["Usefulness for preoperative planning","Educational value for residents/trainees","Usefulness for patient education","Ability to assess implant fit or alignment"];
+const SEC4 = ["Print resolution and detail capture","Durability and structural integrity","Accuracy of segmentation","Overall print quality"];
+
+function buildRatings(cid, items, prefix, withComment) {
+  const el = document.getElementById(cid);
+  if (!el) return;
+  items.forEach((item, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'rating-item';
+    const btns = [1,2,3,4,5].map(n =>
+      `<button class="r-btn r${n}" id="rb_${prefix}_${i}_${n}" onclick="setRating('${prefix}',${i},${n})">${n}</button>`
+    ).join('');
+    wrap.innerHTML = `<div class="rating-item-label">${item}</div>
+      <div class="rating-btns">${btns}</div>
+      ${withComment ? `<input type="text" class="rating-comment" id="rcmt_${prefix}_${i}" placeholder="Comment (optional)…">` : ''}`;
+    el.appendChild(wrap);
+  });
+}
+
+function setRating(prefix, idx, val) {
+  for (let n=1; n<=5; n++) {
+    const b = document.getElementById(`rb_${prefix}_${idx}_${n}`);
+    if (b) b.classList.toggle('active', n === val);
+  }
+  let hid = document.getElementById(`hv_${prefix}_${idx}`);
+  if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.id=`hv_${prefix}_${idx}`; document.body.appendChild(hid); }
+  hid.value = val;
+}
+function getRating(prefix, idx) { const e = document.getElementById(`hv_${prefix}_${idx}`); return e ? e.value : ''; }
+function getComment(prefix, idx) { const e = document.getElementById(`rcmt_${prefix}_${idx}`); return e ? e.value : ''; }
+
+// ── Drive image loading ───────────────────────────────────────────────────────
+const API_KEY = 'AIzaSyBFPQa1TPnjHq96H3ysOSoy2SUhOKxboCg';
+
+async function loadPlane(caseNum, plane, folderId) {
+  const lb   = document.getElementById(`lb${plane}_${caseNum}`);
+  const info = document.getElementById(`info${plane}_${caseNum}`);
+  const ph   = document.getElementById(`ph${plane}_${caseNum}`);
+  if (!lb) return;
+  lb.style.width = '15%'; info.textContent = 'Loading…';
+
+  try {
+    let files = [], token = '';
+    do {
+      const url = `https://www.googleapis.com/drive/v3/files`
+        + `?q=${encodeURIComponent("'" + folderId + "' in parents and trashed=false")}`
+        + `&fields=nextPageToken,files(id,name,mimeType)&orderBy=name&pageSize=1000&key=${API_KEY}`
+        + (token ? '&pageToken='+token : '');
+      const r = await fetch(url);
+      if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||'Drive API error'); }
+      const d = await r.json();
+      files = files.concat((d.files||[]).filter(f=>f.mimeType&&f.mimeType.startsWith('image/')));
+      token = d.nextPageToken || '';
+    } while (token);
+
+    if (!files.length) throw new Error('No images found. Check folder is public.');
+    files.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    const urls = files.map(f=>`https://drive.google.com/thumbnail?id=${f.id}&sz=w800`);
+
+    const st = planeState[caseNum][plane];
+    st.urls = urls; st.idx = Math.floor(urls.length/2); st.brightness = 100;
+
+    const range = document.getElementById(`range${plane}_${caseNum}`);
+    if (range) { range.max = urls.length-1; range.value = st.idx; }
+
+    lb.style.width = '100%'; info.textContent = `${urls.length} slices`;
+    if (ph) ph.style.display = 'none';
+
+    preloadImages(caseNum, plane, urls);
+    goSlice(caseNum, plane, st.idx);
+  } catch(err) {
+    lb.style.width = '0%'; info.textContent = 'Error';
+    if (ph) ph.querySelector('p').innerHTML = `<span style="color:var(--red);">${err.message}</span>`;
+  }
+}
+
+function preloadImages(caseNum, plane, urls) {
+  const st = planeState[caseNum][plane];
+  st.cache = {};
+  let i = 0;
+  function next() {
+    if (i >= urls.length) return;
+    const img = new Image(); img.src = urls[i]; st.cache[i] = img; i++;
+    if (i < urls.length) requestAnimationFrame(next);
+  }
+  next();
+}
+
+function goSlice(caseNum, plane, idx) {
+  const st = planeState[caseNum][plane];
+  if (!st.urls.length) return;
+  st.idx = idx;
+  const img = document.getElementById(`img${plane}_${caseNum}`);
+  if (!img) return;
+  img.style.display = 'block';
+  img.style.filter = `brightness(${st.brightness}%)`;
+  const cached = st.cache && st.cache[idx];
+  img.src = cached ? cached.src : st.urls[idx];
+  const sl = document.getElementById(`slice${plane}_${caseNum}`);
+  if (sl) sl.textContent = `${idx+1} / ${st.urls.length}`;
+}
+
+function adjBright(caseNum, plane, delta) {
+  const st = planeState[caseNum][plane];
+  st.brightness = delta===0 ? 100 : Math.max(20, Math.min(300, st.brightness+delta));
+  const img = document.getElementById(`img${plane}_${caseNum}`);
+  if (img) img.style.filter = `brightness(${st.brightness}%)`;
+}
+
+// ── Video ─────────────────────────────────────────────────────────────────────
+function loadVideo(caseNum) {
+  const url = document.getElementById(`videoInput_${caseNum}`)?.value.trim();
+  if (url) loadVideoForCase(caseNum, url);
+}
+function loadVideoForCase(caseNum, url) {
+  const vp   = document.getElementById(`videoVp_${caseNum}`);
+  const stat = document.getElementById(`videoStatus_${caseNum}`);
+  if (!vp || !url) return;
+  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
+  const vm = url.match(/vimeo\.com\/(\d+)/);
+  const gd = url.match(/drive\.google\.com\/file\/d\/([\w-]+)/);
+  let embed = yt ? `https://www.youtube.com/embed/${yt[1]}` : vm ? `https://player.vimeo.com/video/${vm[1]}` : gd ? `https://drive.google.com/file/d/${gd[1]}/preview` : null;
+  if (embed) { vp.innerHTML = `<iframe src="${embed}" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>`; }
+  else if (url.startsWith('http')) { vp.innerHTML = `<video src="${url}" controls style="width:100%;height:100%;"></video>`; }
+  if (stat) stat.textContent = 'Loaded';
+}
+
+// ── Copy link ─────────────────────────────────────────────────────────────────
+function copyLink() {
+  const url = document.getElementById('shareUrlInput')?.value;
+  if (!url) return;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = event.target; btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = 'Copy link', 2000);
+  });
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+const submittedCases = new Set();
+
+function fv(id) { const e=document.getElementById(id); return e?e.value.trim():''; }
+function fc(name) { const e=document.querySelector(`input[name="${name}"]:checked`); return e?e.value:''; }
+
+function collectCase(ci) {
+  const n = ci+1;
+  const mt = fc(`mt_${n}`) === 'Other' ? 'Other: '+fv(`s1_other_${n}`) : fc(`mt_${n}`);
+  const d = {
+    'Submitted At':      new Date().toLocaleString(),
+    'Case ID':           CONFIG.cases[ci].name || `Case ${n}`,
+    'Evaluator Name':    fv(`s1_name_${n}`),
+    'Medical Specialty': fv(`s1_spec_${n}`),
+    'Date':              fv(`s1_date_${n}`),
+    'Model Identifier':  fv(`s1_mid_${n}`),
+    'Imaging Modality':  fc(`mod_${n}`),
+    'Model Type':        mt,
+    'Metal Implant':     fv(`s1_imp_${n}`),
+  };
+  SEC2.forEach((item,i) => d[`S2: ${item}`] = getRating(`s2_${n}`,i));
+  SEC3.forEach((item,i) => { d[`S3: ${item}`]=getRating(`s3_${n}`,i); const c=getComment(`s3_${n}`,i); if(c) d[`S3 Cmt: ${item}`]=c; });
+  d['S3: Useful for']=fv(`s3_use_${n}`); d['S3: Not useful for']=fv(`s3_nuse_${n}`);
+  SEC4.forEach((item,i) => { d[`S4: ${item}`]=getRating(`s4_${n}`,i); const c=getComment(`s4_${n}`,i); if(c) d[`S4 Cmt: ${item}`]=c; });
+  d['S5: Improvements']=fv(`s5_imp_${n}`); d['S5: Would use in practice']=fv(`s5_prac_${n}`);
+  d['S5: Additional comments']=fv(`s5_cmt_${n}`); d['Signature']=fv(`s5_sig_${n}`); d['Signature Date']=fv(`s5_date_${n}`);
+  return d;
+}
+
+function showCaseStatus(n, msg, type) {
+  const el = document.getElementById(`statusMsg_${n}`);
+  if (!el) return;
+  el.className = 'status-msg status-'+type; el.textContent = msg; el.style.display = 'block';
+  if (type==='success') setTimeout(()=>el.style.display='none', 8000);
+}
+
+async function submitCase(ci) {
+  const n = ci+1;
+  const data = collectCase(ci);
+  if (!data['Evaluator Name']) { showCaseStatus(n, 'Please enter your name before submitting.', 'error'); return; }
+  const btn = document.getElementById(`submitBtn_${n}`);
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  showCaseStatus(n, 'Sending…', 'sending');
+  const sheetsUrl = CONFIG.sheets || localStorage.getItem('heval_sheets') || '';
+  if (!sheetsUrl) { showCaseStatus(n, 'No Google Sheets URL configured. Ask the study coordinator to complete Setup.', 'error'); btn.disabled=false; btn.textContent=`Submit Case ${n} Evaluation`; return; }
+  try {
+    await fetch(sheetsUrl, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+    submittedCases.add(ci);
+    showCaseStatus(n, `✓ Case ${n} submitted successfully. Thank you!`, 'success');
+    btn.className = 'btn-submit submitted'; btn.textContent = '✓ Submitted';
+    // Mark tab
+    const tab = document.getElementById(`tab_${ci}`);
+    if (tab) tab.classList.add('submitted');
+  } catch(err) {
+    showCaseStatus(n, 'Submission failed. Please try again.', 'error');
+    btn.disabled=false; btn.textContent=`Submit Case ${n} Evaluation`;
+  }
+}
+
+
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(function init() {
+  loadFromUrl();
+  const hasAny = CONFIG.cases.some(c=>c.name||c.axial);
+  if (hasAny) {
+    document.getElementById('setupOverlay').style.display = 'none';
+    renderAll();
+  } else {
+    // Show empty state
+    renderTabs();
+    renderLeft(0);
+    renderRight(0);
+  }
+})();
+</script>
+</body>
+</html>
